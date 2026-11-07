@@ -3,139 +3,146 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <title>CoDriver Companion for Tesla</title>
+  <title>Tesla CoDriver MCU2</title>
 
-  <!-- Mapbox GL JS -->
-  <script src="https://api.mapbox.com/mapbox-gl-js/v2.15.0/mapbox-gl.js"></script>
-  <link href="https://api.mapbox.com/mapbox-gl-js/v2.15.0/mapbox-gl.css" rel="stylesheet" />
+  <!-- OpenStreetMap Engine -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; user-select: none; }
-    body, html { width: 100%; height: 100%; overflow: hidden; background-color: #0b0e14; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; color: #ffffff; }
+    body, html { width: 100%; height: 100%; overflow: hidden; background: #0e121a; font-family: -apple-system, sans-serif; color: #fff; }
 
-    #map { width: 100%; height: 100%; position: absolute; top: 0; left: 0; }
+    #map { width: 100%; height: 100%; position: absolute; top: 0; left: 0; z-index: 1; }
 
-    /* Top Navigation Status Bar */
-    .top-bar {
-      position: absolute; top: 16px; left: 16px; right: 16px; height: 70px;
-      background: rgba(18, 24, 38, 0.92); border: 1px solid rgba(255, 255, 255, 0.1);
-      border-radius: 16px; display: flex; align-items: center; justify-content: space-between;
-      padding: 0 20px; backdrop-filter: blur(8px); z-index: 10;
+    /* Dark mode overlay for standard OpenStreetMap tiles */
+    .dark-map .leaflet-tile {
+      filter: brightness(0.6) invert(1) contrast(3) hue-rotate(200deg) saturate(0.3);
     }
-    .speed-container { display: flex; align-items: baseline; gap: 6px; }
-    .speed-val { font-size: 38px; font-weight: 800; color: #00e5ff; font-family: monospace; }
-    .speed-unit { font-size: 14px; color: #a0aec0; text-transform: uppercase; font-weight: 600; }
 
-    .route-info { text-align: right; }
-    .route-street { font-size: 18px; font-weight: 700; color: #fff; }
-    .route-alert { font-size: 13px; color: #ffb703; font-weight: 600; }
+    /* Vertical Dashboard Header */
+    .top-card {
+      position: absolute; top: 20px; left: 20px; right: 20px; height: 90px;
+      background: rgba(14, 18, 26, 0.95); border: 1px solid rgba(255, 255, 255, 0.15);
+      border-radius: 20px; display: flex; align-items: center; justify-content: space-between;
+      padding: 0 24px; z-index: 10; box-shadow: 0 8px 32px rgba(0,0,0,0.5);
+    }
+    .speed-block { display: flex; align-items: baseline; gap: 8px; }
+    .speed-val { font-size: 52px; font-weight: 900; color: #00e5ff; font-family: monospace; }
+    .speed-unit { font-size: 16px; color: #8a99ad; font-weight: 700; }
 
-    /* Bottom Quick Action Bar for Vertical Screen */
-    .bottom-bar {
-      position: absolute; bottom: 24px; left: 16px; right: 16px;
-      display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; z-index: 10;
-    }
-    .btn {
-      background: rgba(22, 30, 46, 0.95); border: 1px solid rgba(255, 255, 255, 0.15);
-      border-radius: 14px; height: 64px; display: flex; flex-direction: column;
-      align-items: center; justify-content: center; color: #fff; font-size: 13px;
-      font-weight: 600; cursor: pointer; transition: background 0.15s;
-    }
-    .btn:active { background: #00e5ff; color: #000; }
-    .btn-icon { font-size: 20px; margin-bottom: 2px; }
+    .status-block { text-align: right; }
+    .status-title { font-size: 20px; font-weight: 700; color: #ffffff; }
+    .status-sub { font-size: 14px; color: #00ff88; font-weight: 600; margin-top: 4px; }
 
-    /* Custom Map Pins */
-    .user-marker {
-      width: 24px; height: 24px; background: #00e5ff; border: 3px solid #ffffff;
-      border-radius: 50%; box-shadow: 0 0 15px rgba(0,229,255,0.8);
+    /* Driver Action Buttons */
+    .bottom-grid {
+      position: absolute; bottom: 30px; left: 20px; right: 20px;
+      display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; z-index: 10;
     }
-    .alert-popup { color: #000; font-weight: bold; }
+    .action-btn {
+      background: rgba(20, 26, 38, 0.95); border: 1px solid rgba(255, 255, 255, 0.18);
+      border-radius: 16px; height: 76px; display: flex; flex-direction: column;
+      align-items: center; justify-content: center; color: #fff; font-size: 15px;
+      font-weight: 700; cursor: pointer;
+    }
+    .action-btn:active { background: #00e5ff; color: #000; }
+    .btn-icon { font-size: 24px; margin-bottom: 2px; }
+
+    /* Custom GPS Marker */
+    .car-dot {
+      width: 22px; height: 22px; background: #00e5ff; border: 3px solid #ffffff;
+      border-radius: 50%; box-shadow: 0 0 16px #00e5ff;
+    }
   </style>
 </head>
 <body>
 
-  <div id="map"></div>
+  <div id="map" class="dark-map"></div>
 
-  <!-- Top Status -->
-  <div class="top-bar">
-    <div class="speed-container">
-      <div id="speed" class="speed-val">0</div>
-      <div class="speed-unit">MPH</div>
+  <!-- Header -->
+  <div class="top-card">
+    <div class="speed-block">
+      <span id="speed" class="speed-val">0</span>
+      <span class="speed-unit">MPH</span>
     </div>
-    <div class="route-info">
-      <div id="street" class="route-street">Locating...</div>
-      <div id="status" class="route-alert">⚡ Radar & Road Alert Layer Active</div>
+    <div class="status-block">
+      <div id="street-name" class="status-title">CoDriver Connected</div>
+      <div id="alert-status" class="status-sub">⚡ Radar & Hazards Active</div>
     </div>
   </div>
 
-  <!-- Bottom Touch Actions -->
-  <div class="bottom-bar">
-    <div class="btn" onclick="reportIncident('Police Trap')">
-      <span class="btn-icon">👮</span> Cops
+  <!-- Bottom Buttons -->
+  <div class="bottom-grid">
+    <div class="action-btn" onclick="addAlert('Police Radar Trap', '👮')">
+      <span class="btn-icon">👮</span> Police
     </div>
-    <div class="btn" onclick="reportIncident('Hazard / Object')">
+    <div class="action-btn" onclick="addAlert('Road Hazard Ahead', '⚠️')">
       <span class="btn-icon">⚠️</span> Hazard
     </div>
-    <div class="btn" onclick="reportIncident('Traffic Jam')">
+    <div class="action-btn" onclick="addAlert('Heavy Traffic', '🚗')">
       <span class="btn-icon">🚗</span> Traffic
     </div>
-    <div class="btn" onclick="toggleMapPitch()">
-      <span class="btn-icon">🌐</span> 2D / 3D
+    <div class="action-btn" onclick="recenterMap()">
+      <span class="btn-icon">🎯</span> Recenter
     </div>
   </div>
 
   <script>
-    // Initialize Mapbox (Using public default tile style)
-    mapboxgl.accessToken = 'pk.eyJ1IjoibWFwYm94IiwiYSI6ImNpejY4M29iazA2Z2gycXA4N2pmbDZmangifQ.-g_vE53SD2WrJ6tFX7QHmA'; 
+    // Default fallback coordinates (New York City) until GPS syncs
+    let currentLat = 40.7128;
+    let currentLng = -74.0060;
 
-    const map = new mapboxgl.Map({
-      container: 'map',
-      style: 'mapbox://styles/mapbox/dark-v11',
-      center: [-122.4194, 37.7749],
-      zoom: 15,
-      pitch: 45
-    });
+    const map = L.map('map', { zoomControl: false }).setView([currentLat, currentLng], 15);
+    
+    // Standard open tiles (works everywhere without blocks)
+    L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      maxZoom: 19,
+      attribution: '© OpenStreetMap'
+    }).addTo(map);
 
-    // Custom Location Marker
-    const el = document.createElement('div');
-    el.className = 'user-marker';
-    const marker = new mapboxgl.Marker(el).setLngLat([-122.4194, 37.7749]).addTo(map);
+    // Marker Setup
+    const carIcon = L.divIcon({ className: 'car-dot', iconSize: [22, 22] });
+    let carMarker = L.marker([currentLat, currentLng], { icon: carIcon }).addTo(map);
 
-    // Geolocation Tracking for Tesla Browser
+    // Live Geolocation Tracking
     if ('geolocation' in navigator) {
       navigator.geolocation.watchPosition(
         (pos) => {
-          const { latitude, longitude, speed } = pos.coords;
-          const currentSpeed = speed ? Math.round(speed * 2.23694) : 0; // m/s to mph
+          currentLat = pos.coords.latitude;
+          currentLng = pos.coords.longitude;
+          const speedMetresPerSec = pos.coords.speed || 0;
+          const speedMph = Math.round(speedMetresPerSec * 2.23694);
 
-          document.getElementById('speed').innerText = currentSpeed;
-          marker.setLngLat([longitude, latitude]);
-          map.flyTo({ center: [longitude, latitude], speed: 1.2 });
+          document.getElementById('speed').innerText = speedMph;
+
+          carMarker.setLatLng([currentLat, currentLng]);
+          map.panTo([currentLat, currentLng], { animate: true });
         },
-        (err) => console.log(err),
+        (err) => {
+          console.log("GPS Notice:", err.message);
+        },
         { enableHighAccuracy: true, maximumAge: 1000, timeout: 5000 }
       );
     }
 
-    // 1-Tap Community Reporting
-    function reportIncident(type) {
-      const center = map.getCenter();
-      new mapboxgl.Popup({ offset: 25 })
-        .setLngLat(center)
-        .setHTML(`<div class="alert-popup">🚨 Reported: ${type}</div>`)
-        .addTo(map);
+    function addAlert(type, emoji) {
+      L.marker([currentLat, currentLng]).addTo(map)
+        .bindPopup(`<b>${emoji} ${type}</b><br>Reported just now`)
+        .openPopup();
+
+      const status = document.getElementById('alert-status');
+      status.innerText = `Reported: ${type}`;
+      status.style.color = "#ffb703";
       
-      document.getElementById('status').innerText = `Reported: ${type}`;
       setTimeout(() => {
-        document.getElementById('status').innerText = "⚡ Radar & Road Alert Layer Active";
+        status.innerText = "⚡ Radar & Hazards Active";
+        status.style.color = "#00ff88";
       }, 4000);
     }
 
-    // Toggle 2D / 3D Perspective (Lite mode for MCU2 Intel Atom)
-    let is3D = true;
-    function toggleMapPitch() {
-      is3D = !is3D;
-      map.easeTo({ pitch: is3D ? 45 : 0, duration: 500 });
+    function recenterMap() {
+      map.setView([currentLat, currentLng], 15);
     }
   </script>
 </body>
