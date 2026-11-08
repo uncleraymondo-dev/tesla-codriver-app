@@ -1,17 +1,9 @@
-I see the video! CoDriver uses a light daylight map theme, a top-left floating turn instruction card with distance countdowns, a speed limit ring indicator in the bottom corner, and 3D building extrusion layers (mapbox://styles/mapbox/standard or custom day style) that give it that rich, detailed 3D video-game-like appearance.
-Here is the fully upgraded version configured with:
- * Daylight Light Map Style (mapbox://styles/mapbox/streets-v12) matching CoDriver's bright look.
- * True 3D Building Extrusions so buildings render in 3D blocks just like your video.
- * Top-Left Turn & Navigation HUD matching the exact layout in the video.
- * Bottom Speed Limit Badge and floating controls.
-Updated Code for index.html
-Update your GitHub repository with this code:
 <!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <title>CoDriver 3D Navigation</title>
+  <title>CoDriver EV Tesla Navigation</title>
 
   <!-- Mapbox GL JS & Geocoder -->
   <script src="https://api.mapbox.com/mapbox-gl-js/v2.15.0/mapbox-gl.js"></script>
@@ -25,9 +17,9 @@ Update your GitHub repository with this code:
 
     #map { width: 100%; height: 100%; position: absolute; top: 0; left: 0; z-index: 1; }
 
-    /* Top Left Navigation HUD Panel */
+    /* Top Navigation HUD */
     .nav-hud {
-      position: absolute; top: 16px; left: 16px; width: 340px;
+      position: absolute; top: 16px; left: 16px; right: 16px; max-width: 420px;
       background: rgba(255, 255, 255, 0.95); border: 1px solid rgba(0, 0, 0, 0.1);
       border-radius: 16px; padding: 12px; box-shadow: 0 10px 30px rgba(0,0,0,0.15);
       display: flex; flex-direction: column; gap: 10px; z-index: 10; backdrop-filter: blur(10px);
@@ -37,8 +29,8 @@ Update your GitHub repository with this code:
       background: #111; color: #fff; padding: 14px 16px; border-radius: 12px;
       display: flex; align-items: center; justify-content: space-between;
     }
-    .turn-distance { font-size: 24px; font-weight: 900; color: #00e5ff; font-family: monospace; }
-    .turn-text { font-size: 15px; font-weight: 700; max-width: 180px; line-height: 1.2; }
+    .turn-distance { font-size: 22px; font-weight: 900; color: #00e5ff; font-family: monospace; }
+    .turn-text { font-size: 14px; font-weight: 700; max-width: 240px; line-height: 1.2; }
 
     /* Search Box Styling */
     .mapboxgl-ctrl-geocoder {
@@ -47,7 +39,18 @@ Update your GitHub repository with this code:
     }
     .mapboxgl-ctrl-geocoder--input { color: #333 !important; font-size: 15px !important; }
 
-    /* Bottom Speed Sign & Action Bar */
+    /* Route & EV Filters */
+    .preferences-bar {
+      display: flex; gap: 6px; overflow-x: auto; padding-bottom: 2px;
+    }
+    .pref-pill {
+      background: #e4e6eb; border: none; padding: 6px 12px; border-radius: 20px;
+      font-size: 12px; font-weight: 700; color: #333; cursor: pointer; white-space: nowrap;
+    }
+    .pref-pill.active { background: #007aff; color: #fff; }
+    .pref-pill.ev-active { background: #34c759; color: #fff; }
+
+    /* Speed Badge & Actions */
     .speed-badge {
       position: absolute; bottom: 30px; left: 20px; width: 65px; height: 65px;
       background: #ffffff; border: 4px solid #ff3b30; border-radius: 50%;
@@ -69,7 +72,14 @@ Update your GitHub repository with this code:
     }
     .action-btn:active { background: #00e5ff; color: #000; }
 
-    /* Custom 3D Vehicle Marker */
+    /* EV Station Map Marker */
+    .ev-marker {
+      width: 32px; height: 32px; background: #34c759; border: 2px solid #ffffff;
+      border-radius: 50%; display: flex; align-items: center; justify-content: center;
+      color: #fff; font-weight: bold; font-size: 16px; box-shadow: 0 4px 10px rgba(0,0,0,0.3);
+      cursor: pointer;
+    }
+
     .car-marker {
       width: 26px; height: 26px; background: #00e5ff; border: 3px solid #ffffff;
       border-radius: 50%; box-shadow: 0 0 20px rgba(0, 229, 255, 0.9);
@@ -80,96 +90,182 @@ Update your GitHub repository with this code:
 
   <div id="map"></div>
 
-  <!-- Top-Left Navigation HUD (Matches CoDriver Layout) -->
+  <!-- Top Navigation HUD -->
   <div class="nav-hud">
     <div id="turn-card" class="turn-instruction-card" style="display: none;">
       <div id="turn-dist" class="turn-distance">--</div>
       <div id="turn-text" class="turn-text">Search destination below</div>
     </div>
+    
     <div id="search-container"></div>
+
+    <!-- Filters -->
+    <div class="preferences-bar">
+      <button class="pref-pill ev-active" id="btn-ev" onclick="toggleEVStations()">⚡ EV Chargers</button>
+      <button class="pref-pill active" id="btn-traffic" onclick="setMode('traffic')">🚦 Traffic</button>
+      <button class="pref-pill" id="btn-notolls" onclick="setMode('notolls')">🚫 No Tolls</button>
+      <button class="pref-pill" id="btn-nomotorway" onclick="setMode('nomotorway')">🛣️ No Motorways</button>
+    </div>
   </div>
 
-  <!-- Bottom Speed Limit Ring -->
+  <!-- Speed Ring -->
   <div class="speed-badge">
     <span id="speed" class="speed-num">0</span>
     <span class="speed-lbl">MPH</span>
   </div>
 
-  <!-- Bottom Right Action Buttons -->
+  <!-- Controls -->
   <div class="bottom-bar">
-    <div class="action-btn" onclick="toggle3D()">🌐 2D / 3D</div>
-    <div class="action-btn" onclick="reportIncident('Police Trap', '👮')">🚨 Report</div>
+    <div class="action-btn" onclick="toggle3D()">🌐 3D View</div>
+    <div class="action-btn" onclick="clearRoute()">🗑️ Clear</div>
   </div>
 
   <script>
     mapboxgl.accessToken = 'pk.eyJ1IjoidW5jbGVyYXltb25kby1kZXYiLCJhIjoiY213NzJvZ3BsMG90cDMwcnh5a3JtamE4bCJ9.uOBPlo6XoSLmmx1AXsYxYA';
 
-    let userLng = 2.3522; // Default Paris center matching video style
+    let userLng = 2.3522;
     let userLat = 48.8566;
     let userHeading = 0;
+    let activeDestination = null;
+    let currentRoutingMode = 'traffic';
+    let evMarkers = [];
+    let showEV = true;
 
-    // Initialize Map with Daylight Streets Style
     const map = new mapboxgl.Map({
       container: 'map',
       style: 'mapbox://styles/mapbox/streets-v12',
       center: [userLng, userLat],
-      zoom: 16,
-      pitch: 60, // 3D perspective
+      zoom: 15,
+      pitch: 60,
       bearing: 0
     });
 
+    map.dragRotate.disable();
+    map.touchZoomRotate.disableRotation();
+
     map.on('load', () => {
       map.resize();
-
-      // Add 3D Building Extrusions Layer
       const layers = map.getStyle().layers;
-      const labelLayerId = layers.find(
-        (layer) => layer.type === 'symbol' && layer.layout['text-field']
-      ).id;
+      const labelLayerId = layers.find(l => l.type === 'symbol' && l.layout['text-field']).id;
+      map.addLayer({
+        'id': '3d-buildings',
+        'source': 'composite',
+        'source-layer': 'building',
+        'filter': ['==', 'extrude', 'true'],
+        'type': 'fill-extrusion',
+        'minzoom': 14,
+        'paint': { 'fill-extrusion-color': '#e0e0e0', 'fill-extrusion-height': ['get', 'height'], 'fill-extrusion-base': ['get', 'min_height'], 'fill-extrusion-opacity': 0.85 }
+      }, labelLayerId);
 
-      map.addLayer(
-        {
-          'id': '3d-buildings',
-          'source': 'composite',
-          'source-layer': 'building',
-          'filter': ['==', 'extrude', 'true'],
-          'type': 'fill-extrusion',
-          'minzoom': 14,
-          'paint': {
-            'fill-extrusion-color': '#e0e0e0',
-            'fill-extrusion-height': ['get', 'height'],
-            'fill-extrusion-base': ['get', 'min_height'],
-            'fill-extrusion-opacity': 0.85
-          }
-        },
-        labelLayerId
-      );
+      // Fetch nearby EV Charging Stations
+      fetchEVChargers(userLat, userLng);
     });
 
-    // Custom Vehicle Marker
     const carEl = document.createElement('div');
     carEl.className = 'car-marker';
     const carMarker = new mapboxgl.Marker(carEl).setLngLat([userLng, userLat]).addTo(map);
 
-    // Geocoder Search Box
     const geocoder = new MapboxGeocoder({
       accessToken: mapboxgl.accessToken,
       mapboxgl: mapboxgl,
-      placeholder: "Where to? (e.g. Louvre)",
+      placeholder: "Search destination or EV Charger...",
       marker: false
     });
     document.getElementById('search-container').appendChild(geocoder.onAdd(map));
 
     geocoder.on('result', (e) => {
-      getRoute(e.result.center);
+      activeDestination = e.result.center;
+      calculateRoute();
     });
 
-    async function getRoute(destination) {
+    // Fetch EV Charging Stations from OpenChargeMap API
+    async function fetchEVChargers(lat, lng) {
+      if (!showEV) return;
+      try {
+        const response = await fetch(
+          `https://api.openchargemap.io/v3/poi/?output=json&latitude=${lat}&longitude=${lng}&distance=15&maxresults=25&compact=true&verbose=false&key=1db5b244-6701-447b-8395-53434eb0766e`
+        );
+        const stations = await response.json();
+        clearEVMarkers();
+
+        stations.forEach((st) => {
+          if (!st.AddressInfo) return;
+          const { Latitude, Longitude, Title, AddressLine1 } = st.AddressInfo;
+          const operator = st.OperatorInfo ? st.OperatorInfo.Title : "Public Network";
+          
+          let maxKw = 0;
+          if (st.Connections && st.Connections.length > 0) {
+            st.Connections.forEach(c => { if (c.PowerKW > maxKw) maxKw = c.PowerKW; });
+          }
+          const powerText = maxKw > 0 ? `${maxKw} kW Fast Charger` : "Standard Charger";
+
+          const el = document.createElement('div');
+          el.className = 'ev-marker';
+          el.innerText = '⚡';
+
+          const popupHtml = `
+            <div style="font-family:sans-serif; padding:4px;">
+              <b style="font-size:14px; color:#111;">${Title}</b><br>
+              <span style="font-size:12px; color:#007aff; font-weight:bold;">${operator}</span><br>
+              <span style="font-size:11px; color:#555;">⚡ ${powerText}</span><br>
+              <button onclick="setEVRoute(${Longitude}, ${Latitude})" style="margin-top:6px; background:#34c759; color:#fff; border:none; padding:6px 10px; border-radius:6px; font-weight:bold; cursor:pointer;">Route Here</button>
+            </div>
+          `;
+
+          const popup = new mapboxgl.Popup({ offset: 25 }).setHTML(popupHtml);
+          const marker = new mapboxgl.Marker(el).setLngLat([Longitude, Latitude]).setPopup(popup).addTo(map);
+          evMarkers.push(marker);
+        });
+      } catch (err) {
+        console.log("EV Data fetch error:", err);
+      }
+    }
+
+    function setEVRoute(lng, lat) {
+      activeDestination = [lng, lat];
+      calculateRoute();
+    }
+
+    function clearEVMarkers() {
+      evMarkers.forEach(m => m.remove());
+      evMarkers = [];
+    }
+
+    function toggleEVStations() {
+      showEV = !showEV;
+      const btn = document.getElementById('btn-ev');
+      if (showEV) {
+        btn.classList.add('ev-active');
+        fetchEVChargers(userLat, userLng);
+      } else {
+        btn.classList.remove('ev-active');
+        clearEVMarkers();
+      }
+    }
+
+    function setMode(mode) {
+      currentRoutingMode = mode;
+      document.querySelectorAll('.pref-pill:not(#btn-ev)').forEach(p => p.classList.remove('active'));
+      document.getElementById(`btn-${mode}`).classList.add('active');
+      if (activeDestination) calculateRoute();
+    }
+
+    async function calculateRoute() {
+      if (!activeDestination) return;
+
+      let profile = 'mapbox/driving-traffic';
+      let extraParams = '';
+
+      if (currentRoutingMode === 'notolls') extraParams += '&exclude=toll';
+      if (currentRoutingMode === 'nomotorway') extraParams += '&exclude=motorway';
+
       try {
         const query = await fetch(
-          `https://api.mapbox.com/directions/v5/mapbox/driving/${userLng},${userLat};${destination[0]},${destination[1]}?steps=true&geometries=geojson&access_token=${mapboxgl.accessToken}`
+          `https://api.mapbox.com/directions/v5/${profile}/${userLng},${userLat};${activeDestination[0]},${activeDestination[1]}?steps=true&geometries=geojson&access_token=${mapboxgl.accessToken}${extraParams}`
         );
         const json = await query.json();
+        if (!json.routes || json.routes.length === 0) return;
+
         const data = json.routes[0];
         const route = data.geometry.coordinates;
 
@@ -193,41 +289,41 @@ Update your GitHub repository with this code:
             paint: { 'line-color': '#007aff', 'line-width': 8, 'line-opacity': 0.9 }
           });
         }
-        map.flyTo({ center: [userLng, userLat], zoom: 17, pitch: 60 });
       } catch (err) {
         console.error(err);
       }
     }
 
-    // Live Geolocation & Camera Tracking
+    // Geolocation Tracker
     if ('geolocation' in navigator) {
       navigator.geolocation.watchPosition(
         (pos) => {
           userLat = pos.coords.latitude;
           userLng = pos.coords.longitude;
           const speedMph = Math.round((pos.coords.speed || 0) * 2.23694);
-          userHeading = pos.coords.heading || 0;
+          const rawHeading = pos.coords.heading;
 
           document.getElementById('speed').innerText = speedMph;
           carMarker.setLngLat([userLng, userLat]);
 
-          map.easeTo({
-            center: [userLng, userLat],
-            bearing: userHeading,
-            duration: 1000,
-            easing: (t) => t
-          });
+          let cameraOptions = { center: [userLng, userLat], duration: 800 };
+          if (speedMph > 3 && rawHeading !== null && !isNaN(rawHeading)) {
+            userHeading = rawHeading;
+            cameraOptions.bearing = userHeading;
+          }
+
+          map.easeTo(cameraOptions);
         },
         (err) => console.log(err),
         { enableHighAccuracy: true, maximumAge: 1000, timeout: 5000 }
       );
     }
 
-    function reportIncident(type, emoji) {
-      new mapboxgl.Popup({ offset: 25 })
-        .setLngLat([userLng, userLat])
-        .setHTML(`<b>${emoji} ${type} Reported</b>`)
-        .addTo(map);
+    function clearRoute() {
+      activeDestination = null;
+      document.getElementById('turn-card').style.display = 'none';
+      if (map.getLayer('route')) map.removeLayer('route');
+      if (map.getSource('route')) map.removeSource('route');
     }
 
     let is3D = true;
@@ -238,4 +334,3 @@ Update your GitHub repository with this code:
   </script>
 </body>
 </html>
-
