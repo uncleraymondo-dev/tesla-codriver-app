@@ -3,56 +3,66 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <title>Tesla CoDriver</title>
+  <title>Tesla 3D CoDriver Navigation</title>
 
-  <!-- Leaflet CSS & JS (100% Free, No API Key Required) -->
-  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
-  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <!-- Mapbox GL JS & Geocoder -->
+  <script src="https://api.mapbox.com/mapbox-gl-js/v2.15.0/mapbox-gl.js"></script>
+  <link href="https://api.mapbox.com/mapbox-gl-js/v2.15.0/mapbox-gl.css" rel="stylesheet" />
+  <script src="https://api.mapbox.com/mapbox-gl-js/plugins/mapbox-gl-geocoder/v5.0.0/mapbox-gl-geocoder.min.js"></script>
+  <link rel="stylesheet" href="https://api.mapbox.com/mapbox-gl-js/plugins/mapbox-gl-geocoder/v5.0.0/mapbox-gl-geocoder.css" type="text/css">
 
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; user-select: none; }
-    body, html { width: 100%; height: 100%; overflow: hidden; background: #0b0e14; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; color: #ffffff; }
+    body, html { width: 100%; height: 100%; overflow: hidden; background: #0b0e14; font-family: -apple-system, sans-serif; color: #fff; }
 
     #map { width: 100%; height: 100%; position: absolute; top: 0; left: 0; z-index: 1; }
 
-    /* Dark theme filter applied to OpenStreetMap tiles */
-    .leaflet-tile-container img {
-      filter: brightness(0.6) invert(1) contrast(3) hue-rotate(200deg) saturate(0.3) !important;
+    /* Top Navigation Banner */
+    .top-panel {
+      position: absolute; top: 16px; left: 16px; right: 16px;
+      display: flex; flex-direction: column; gap: 10px; z-index: 10;
     }
-
-    /* Top Dashboard Status Bar */
-    .top-bar {
-      position: absolute; top: 16px; left: 16px; right: 16px; height: 74px;
-      background: rgba(18, 24, 38, 0.92); border: 1px solid rgba(255, 255, 255, 0.12);
+    .nav-bar {
+      height: 70px; background: rgba(18, 24, 38, 0.95); border: 1px solid rgba(255, 255, 255, 0.15);
       border-radius: 16px; display: flex; align-items: center; justify-content: space-between;
-      padding: 0 20px; z-index: 10; backdrop-filter: blur(8px);
+      padding: 0 20px; backdrop-filter: blur(8px);
     }
-    .speed-container { display: flex; align-items: baseline; gap: 6px; }
-    .speed-val { font-size: 40px; font-weight: 800; color: #00e5ff; font-family: monospace; }
-    .speed-unit { font-size: 14px; color: #a0aec0; text-transform: uppercase; font-weight: 600; }
+    .speed-box { display: flex; align-items: baseline; gap: 6px; }
+    .speed-val { font-size: 38px; font-weight: 900; color: #00e5ff; font-family: monospace; }
+    .speed-unit { font-size: 13px; color: #a0aec0; font-weight: 700; }
 
-    .route-info { text-align: right; }
-    .route-street { font-size: 18px; font-weight: 700; color: #fff; }
-    .route-alert { font-size: 13px; color: #00ff88; font-weight: 600; }
+    /* Turn Banner */
+    .turn-card {
+      background: #00e5ff; color: #0b0e14; padding: 14px 20px; border-radius: 14px;
+      font-size: 18px; font-weight: 800; display: none; justify-content: space-between; align-items: center;
+    }
 
-    /* Bottom Touch Grid for MCU2 Screen */
+    /* Destination Search Box Styling */
+    .mapboxgl-ctrl-geocoder {
+      width: 100% !important; max-width: none !important; background: rgba(22, 30, 46, 0.95) !important;
+      border: 1px solid rgba(255, 255, 255, 0.2) !important; border-radius: 14px !important;
+      box-shadow: none !important; color: #fff !important;
+    }
+    .mapboxgl-ctrl-geocoder--input { color: #fff !important; font-size: 16px !important; }
+
+    /* Bottom Control Bar */
     .bottom-bar {
       position: absolute; bottom: 24px; left: 16px; right: 16px;
       display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; z-index: 10;
     }
     .btn {
       background: rgba(22, 30, 46, 0.95); border: 1px solid rgba(255, 255, 255, 0.15);
-      border-radius: 14px; height: 68px; display: flex; flex-direction: column;
-      align-items: center; justify-content: center; color: #fff; font-size: 13px;
-      font-weight: 600; cursor: pointer;
+      border-radius: 14px; height: 64px; display: flex; flex-direction: column;
+      align-items: center; justify-content: center; color: #fff; font-size: 13px; font-weight: 700;
+      cursor: pointer;
     }
     .btn:active { background: #00e5ff; color: #000; }
-    .btn-icon { font-size: 22px; margin-bottom: 2px; }
+    .btn-icon { font-size: 20px; margin-bottom: 2px; }
 
-    /* Custom Live Location Marker */
-    .user-marker {
-      width: 22px; height: 22px; background: #00e5ff; border: 3px solid #ffffff;
-      border-radius: 50%; box-shadow: 0 0 15px rgba(0,229,255,0.9);
+    /* Custom 3D Vehicle Marker */
+    .car-marker {
+      width: 24px; height: 24px; background: #00e5ff; border: 3px solid #ffffff;
+      border-radius: 50%; box-shadow: 0 0 20px rgba(0, 229, 255, 0.9);
     }
   </style>
 </head>
@@ -60,90 +70,162 @@
 
   <div id="map"></div>
 
-  <!-- Top Display -->
-  <div class="top-bar">
-    <div class="speed-container">
-      <div id="speed" class="speed-val">0</div>
-      <div class="speed-unit">MPH</div>
+  <!-- Navigation Panel -->
+  <div class="top-panel">
+    <div class="nav-bar">
+      <div class="speed-box">
+        <div id="speed" class="speed-val">0</div>
+        <div class="speed-unit">MPH</div>
+      </div>
+      <div id="search-container" style="flex: 1; margin-left: 16px;"></div>
     </div>
-    <div class="route-info">
-      <div id="street" class="route-street">CoDriver Ready</div>
-      <div id="status" class="route-alert">⚡ Radar & Road Alert Layer Active</div>
+    
+    <div id="turn-card" class="turn-card">
+      <span id="turn-text">Searching route...</span>
+      <span id="turn-dist">--</span>
     </div>
   </div>
 
-  <!-- Bottom Buttons -->
+  <!-- Driver Action Buttons -->
   <div class="bottom-bar">
     <div class="btn" onclick="reportIncident('Police Trap', '👮')">
       <span class="btn-icon">👮</span> Cops
     </div>
-    <div class="btn" onclick="reportIncident('Hazard / Object', '⚠️')">
+    <div class="btn" onclick="reportIncident('Hazard', '⚠️')">
       <span class="btn-icon">⚠️</span> Hazard
     </div>
-    <div class="btn" onclick="reportIncident('Traffic Jam', '🚗')">
+    <div class="btn" onclick="reportIncident('Traffic', '🚗')">
       <span class="btn-icon">🚗</span> Traffic
     </div>
-    <div class="btn" onclick="recenterMap()">
-      <span class="btn-icon">🎯</span> Recenter
+    <div class="btn" onclick="toggle3D()">
+      <span class="btn-icon">🌐</span> 2D / 3D
     </div>
   </div>
 
   <script>
-    // Initialize Leaflet map with standard OpenStreetMap tiles
-    // Default initial location set to London, updates instantly on GPS grab
-    let userLat = 51.5074;
-    let userLng = -0.1278;
+    // Configured with your Mapbox Public Token
+    mapboxgl.accessToken = 'pk.eyJ1IjoidW5jbGVyYXltb25kby1kZXYiLCJhIjoiY213NzJvZ3BsMG90cDMwcnh5a3JtamE4bCJ9.uOBPlo6XoSLmmx1AXsYxYA';
 
-    const map = L.map('map', { zoomControl: false }).setView([userLat, userLng], 15);
+    let userLng = -122.4194;
+    let userLat = 37.7749;
+    let userHeading = 0;
 
-    L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
-      maxZoom: 19,
-      attribution: '© OpenStreetMap'
-    }).addTo(map);
+    // 1. Initialize Mapbox in 3D Perspective Mode
+    const map = new mapboxgl.Map({
+      container: 'map',
+      style: 'mapbox://styles/mapbox/dark-v11',
+      center: [userLng, userLat],
+      zoom: 16,
+      pitch: 60,
+      bearing: 0
+    });
 
-    // Create marker icon
-    const carIcon = L.divIcon({ className: 'user-marker', iconSize: [22, 22] });
-    let carMarker = L.marker([userLat, userLng], { icon: carIcon }).addTo(map);
+    // Recalculate canvas size on initial load for mobile/car displays
+    map.on('load', () => {
+      map.resize();
+    });
 
-    // Geolocation Watcher
+    // 2. Custom Car Marker
+    const carEl = document.createElement('div');
+    carEl.className = 'car-marker';
+    const carMarker = new mapboxgl.Marker(carEl).setLngLat([userLng, userLat]).addTo(map);
+
+    // 3. Search Box Geocoder Setup
+    const geocoder = new MapboxGeocoder({
+      accessToken: mapboxgl.accessToken,
+      mapboxgl: mapboxgl,
+      placeholder: "Where to?",
+      marker: false
+    });
+    document.getElementById('search-container').appendChild(geocoder.onAdd(map));
+
+    // 4. Calculate Navigation Route on Search Selection
+    geocoder.on('result', (e) => {
+      const destCoords = e.result.center;
+      getRoute(destCoords);
+    });
+
+    async function getRoute(destination) {
+      try {
+        const query = await fetch(
+          `https://api.mapbox.com/directions/v5/mapbox/driving/${userLng},${userLat};${destination[0]},${destination[1]}?steps=true&geometries=geojson&access_token=${mapboxgl.accessToken}`
+        );
+        const json = await query.json();
+        const data = json.routes[0];
+        const route = data.geometry.coordinates;
+
+        // Update Navigation Turn Banner
+        if (data.legs[0].steps.length > 0) {
+          const nextStep = data.legs[0].steps[0];
+          document.getElementById('turn-card').style.display = 'flex';
+          document.getElementById('turn-text').innerText = nextStep.maneuver.instruction;
+          document.getElementById('turn-dist').innerText = `${Math.round(nextStep.distance)} m`;
+        }
+
+        // Draw the Route Line on the Map
+        const geojson = {
+          type: 'Feature',
+          properties: {},
+          geometry: { type: 'LineString', coordinates: route }
+        };
+
+        if (map.getSource('route')) {
+          map.getSource('route').setData(geojson);
+        } else {
+          map.addLayer({
+            id: 'route',
+            type: 'line',
+            source: { type: 'geojson', data: geojson },
+            layout: { 'line-join': 'round', 'line-cap': 'round' },
+            paint: { 'line-color': '#00e5ff', 'line-width': 7, 'line-opacity': 0.85 }
+          });
+        }
+
+        map.flyTo({ center: [userLng, userLat], zoom: 17, pitch: 60 });
+      } catch (err) {
+        console.error("Routing error:", err);
+      }
+    }
+
+    // 5. Geolocation Tracking & 3D Camera Follow
     if ('geolocation' in navigator) {
       navigator.geolocation.watchPosition(
         (pos) => {
           userLat = pos.coords.latitude;
           userLng = pos.coords.longitude;
           const speedMetresPerSec = pos.coords.speed || 0;
-          const currentSpeed = Math.round(speedMetresPerSec * 2.23694);
+          userHeading = pos.coords.heading || 0;
+          const speedMph = Math.round(speedMetresPerSec * 2.23694);
 
-          document.getElementById('speed').innerText = currentSpeed;
-          document.getElementById('street').innerText = "Live GPS Active";
+          document.getElementById('speed').innerText = speedMph;
+          carMarker.setLngLat([userLng, userLat]);
 
-          carMarker.setLatLng([userLat, userLng]);
-          map.panTo([userLat, userLng]);
+          // Lock 3D camera to vehicle position & direction
+          map.easeTo({
+            center: [userLng, userLat],
+            bearing: userHeading,
+            duration: 1000,
+            easing: (t) => t
+          });
         },
-        (err) => {
-          document.getElementById('street').innerText = "GPS Offline";
-        },
+        (err) => console.log("GPS Error:", err),
         { enableHighAccuracy: true, maximumAge: 1000, timeout: 5000 }
       );
     }
 
+    // 6. Community Alerts
     function reportIncident(type, emoji) {
-      L.marker([userLat, userLng]).addTo(map)
-        .bindPopup(`<b>${emoji} ${type}</b><br>Reported just now`)
-        .openPopup();
-
-      const status = document.getElementById('status');
-      status.innerText = `Reported: ${type}`;
-      status.style.color = "#ffb703";
-      
-      setTimeout(() => {
-        status.innerText = "⚡ Radar & Road Alert Layer Active";
-        status.style.color = "#00ff88";
-      }, 4000);
+      new mapboxgl.Popup({ offset: 25 })
+        .setLngLat([userLng, userLat])
+        .setHTML(`<div style="color:#000; font-weight:bold;">${emoji} ${type} Reported</div>`)
+        .addTo(map);
     }
 
-    function recenterMap() {
-      map.setView([userLat, userLng], 15);
+    // 7. Toggle 2D Flat / 3D Navigation Camera
+    let is3D = true;
+    function toggle3D() {
+      is3D = !is3D;
+      map.easeTo({ pitch: is3D ? 60 : 0, duration: 600 });
     }
   </script>
 </body>
